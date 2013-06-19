@@ -238,6 +238,19 @@ const uint32_t sha256_init_state[8] = {
 	0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
 };
 
+void sha256d_transform(void *hash, const void *data, const void *midstate)
+{
+	uint32_t hash1[16];
+	static const uint32_t suffix[8] = {
+		0x80000000, 0, 0, 0, 0, 0, 0, 256
+	};
+
+	memcpy(hash1 + 8, suffix, 32);
+
+	runhash(hash1, data, midstate);
+	runhash(hash, hash1, sha256_init_state);
+}
+
 /* suspiciously similar to ScanHash* from bitcoin */
 bool scanhash_c(int thr_id, const unsigned char *midstate, unsigned char *data,
 	        unsigned char *hash, const unsigned char *target,
@@ -251,13 +264,10 @@ bool scanhash_c(int thr_id, const unsigned char *midstate, unsigned char *data,
 	work_restart[thr_id].restart = 0;
 
 	while (1) {
-		unsigned char hash1[32];
-
 		n++;
 		*nonce = n;
 
-		runhash(hash1, data, midstate);
-		runhash(hash, hash1, sha256_init_state);
+		sha256d_transform(hash, data, midstate);
 
 		stat_ctr++;
 
