@@ -18,7 +18,7 @@
 
 #define NPAR 32
 
-static void DoubleBlockSHA256(const void* pin, void* pout, const void* pinit, unsigned int hash[8][NPAR], const void* init2);
+static void DoubleBlockSHA256(const void* pin, void* pout, const void* pinit, unsigned int h[NPAR], const void* init2);
 
 static const unsigned int sha256_consts[] = {
     0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, /*  0 */
@@ -118,22 +118,21 @@ unsigned int ScanHash_4WaySSE2(int thr_id, const unsigned char *pmidstate,
 
     for (;;)
     {
-        unsigned int thash[9][NPAR] __attribute__((aligned(128)));
+        unsigned int thash_h[NPAR] __attribute__((aligned(128)));
 	int j;
 
 	nonce += NPAR;
 	*nNonce_p = nonce;
 
-        DoubleBlockSHA256(pdata, phash1, pmidstate, thash, pSHA256InitState);
+        DoubleBlockSHA256(pdata, phash1, pmidstate, thash_h, pSHA256InitState);
 
         for (j = 0; j < NPAR; j++)
         {
-            if (unlikely(thash[7][j] == 0))
+            if (unlikely(thash_h[j] == 0))
             {
-		int i;
-
-                for (i = 0; i < 32/4; i++)
-                    ((unsigned int*)phash)[i] = thash[i][j];
+                /* redo the transform properly, without cheating */
+		*nNonce_p = nonce + j;
+		sha256d_transform(phash, pdata, pmidstate);
 
 		if (fulltest(phash, ptarget)) {
 			*nHashesDone = nonce;
@@ -152,7 +151,7 @@ unsigned int ScanHash_4WaySSE2(int thr_id, const unsigned char *pmidstate,
 }
 
 
-static void DoubleBlockSHA256(const void* pin, void* pad, const void *pre, unsigned int thash[9][NPAR], const void *init)
+static void DoubleBlockSHA256(const void* pin, void* pad, const void *pre, unsigned int thash_h[NPAR], const void *init)
 {
     unsigned int* In = (unsigned int*)pin;
     unsigned int* Pad = (unsigned int*)pad;
@@ -471,20 +470,9 @@ static void DoubleBlockSHA256(const void* pin, void* pad, const void *pre, unsig
         SHA256ROUND(b, c, d, e, f, g, h, a, 63, w15);
 #endif
 
-        /* store resulsts directly in thash */
-#define store_2(x,i)  \
-        w0 = _mm_set1_epi32(hInit[i]); \
-        *(__m128i *)&(thash)[i][0+k] = _mm_add_epi32(w0, x);
-
-        store_2(a, 0);
-        store_2(b, 1);
-        store_2(c, 2);
-        store_2(d, 3);
-        store_2(e, 4);
-        store_2(f, 5);
-        store_2(g, 6);
-        store_2(h, 7);
-        *(__m128i *)&(thash)[8][0+k] = nonce;
+        /* store H result directly in thash_h */
+        w0 = _mm_set1_epi32(hInit[7]);
+        *(__m128i *)&(thash_h)[0+k] = _mm_add_epi32(w0, h);
     }
 
 }

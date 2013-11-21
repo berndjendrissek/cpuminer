@@ -157,6 +157,7 @@ extern bool scanhash_via(int, unsigned char *data_inout,
 	const unsigned char *target,
 	uint32_t max_nonce, unsigned long *hashes_done);
 
+extern void sha256d_transform(void *hash, const void *data, const void *midstate);
 extern bool scanhash_c(int, const unsigned char *midstate, unsigned char *data,
 	      unsigned char *hash, const unsigned char *target,
 	      uint32_t max_nonce, unsigned long *hashes_done);
