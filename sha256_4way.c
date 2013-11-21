@@ -159,6 +159,9 @@ static void DoubleBlockSHA256(const void* pin, void* pad, const void *pre, unsig
     unsigned int* hInit = (unsigned int*)init;
     unsigned int /* i, j, */ k;
 
+    /* first three rounds do not depend on nonce */
+    __m128i hMid[8];
+
     /* vectors used in calculation */
     __m128i w0, w1, w2, w3, w4, w5, w6, w7;
     __m128i w8, w9, w10, w11, w12, w13, w14, w15;
@@ -169,8 +172,31 @@ static void DoubleBlockSHA256(const void* pin, void* pad, const void *pre, unsig
     /* nonce offset for vector */
     __m128i offset = _mm_set_epi32(0x00000003, 0x00000002, 0x00000001, 0x00000000);
 
-
     preNonce = _mm_add_epi32(_mm_set1_epi32(In[3]), offset);
+
+    /* precalculate first three rounds */
+    w0 = _mm_set1_epi32(In[0]);
+    w1 = _mm_set1_epi32(In[1]);
+    w2 = _mm_set1_epi32(In[2]);
+    a = _mm_set1_epi32(hPre[0]);
+    b = _mm_set1_epi32(hPre[1]);
+    c = _mm_set1_epi32(hPre[2]);
+    d = _mm_set1_epi32(hPre[3]);
+    e = _mm_set1_epi32(hPre[4]);
+    f = _mm_set1_epi32(hPre[5]);
+    g = _mm_set1_epi32(hPre[6]);
+    h = _mm_set1_epi32(hPre[7]);
+    SHA256ROUND(a, b, c, d, e, f, g, h, 0, w0);
+    SHA256ROUND(h, a, b, c, d, e, f, g, 1, w1);
+    SHA256ROUND(g, h, a, b, c, d, e, f, 2, w2);
+    hMid[0] = a;
+    hMid[1] = b;
+    hMid[2] = c;
+    hMid[3] = d;
+    hMid[4] = e;
+    hMid[5] = f;
+    hMid[6] = g;
+    hMid[7] = h;
 
     for(k = 0; k<NPAR; k+=4) {
         w0 = _mm_set1_epi32(In[0]);
@@ -194,18 +220,15 @@ static void DoubleBlockSHA256(const void* pin, void* pad, const void *pre, unsig
 	nonce = _mm_add_epi32(preNonce, _mm_set1_epi32(k));
         w3 = nonce;
 
-        a = _mm_set1_epi32(hPre[0]);
-        b = _mm_set1_epi32(hPre[1]);
-        c = _mm_set1_epi32(hPre[2]);
-        d = _mm_set1_epi32(hPre[3]);
-        e = _mm_set1_epi32(hPre[4]);
-        f = _mm_set1_epi32(hPre[5]);
-        g = _mm_set1_epi32(hPre[6]);
-        h = _mm_set1_epi32(hPre[7]);
+        a = hMid[0];
+        b = hMid[1];
+        c = hMid[2];
+        d = hMid[3];
+        e = hMid[4];
+        f = hMid[5];
+        g = hMid[6];
+        h = hMid[7];
 
-        SHA256ROUND(a, b, c, d, e, f, g, h, 0, w0);
-        SHA256ROUND(h, a, b, c, d, e, f, g, 1, w1);
-        SHA256ROUND(g, h, a, b, c, d, e, f, 2, w2);
         SHA256ROUND(f, g, h, a, b, c, d, e, 3, w3);
         SHA256ROUND(e, f, g, h, a, b, c, d, 4, w4);
         SHA256ROUND(d, e, f, g, h, a, b, c, 5, w5);
