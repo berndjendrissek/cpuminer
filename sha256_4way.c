@@ -84,6 +84,10 @@ static inline void store_epi32(const __m128i x, unsigned int *x0, unsigned int *
 d = _mm_add_epi32(d, T1);                                           \
 h = _mm_add_epi32(T1, _mm_add_epi32(BIGSIGMA0_256(a), Maj(a, b, c)));
 
+#define SHA256ROUND_THROWA(a, b, c, d, e, f, g, h, i, w)                       \
+    T1 = add5(h, BIGSIGMA1_256(e), Ch(e, f, g), _mm_set1_epi32(sha256_consts[i]), w);   \
+d = _mm_add_epi32(d, T1);
+
 static inline void dumpreg(__m128i x, char *msg) {
     union { unsigned int ret[4]; __m128i x; } box;
     box.x = x ;
@@ -449,13 +453,13 @@ static void DoubleBlockSHA256(const void* pin, void* pad, const void *pre, unsig
         w8 = add4(SIGMA1_256(w6), w1, SIGMA0_256(w9), w8);
         SHA256ROUND(a, b, c, d, e, f, g, h, 56, w8);
         w9 = add4(SIGMA1_256(w7), w2, SIGMA0_256(w10), w9);
-        SHA256ROUND(h, a, b, c, d, e, f, g, 57, w9);
+        SHA256ROUND_THROWA(h, a, b, c, d, e, f, g, 57, w9);
         w10 = add4(SIGMA1_256(w8), w3, SIGMA0_256(w11), w10);
-        SHA256ROUND(g, h, a, b, c, d, e, f, 58, w10);
+        SHA256ROUND_THROWA(g, h, a, b, c, d, e, f, 58, w10);
         w11 = add4(SIGMA1_256(w9), w4, SIGMA0_256(w12), w11);
-        SHA256ROUND(f, g, h, a, b, c, d, e, 59, w11);
+        SHA256ROUND_THROWA(f, g, h, a, b, c, d, e, 59, w11);
         w12 = add4(SIGMA1_256(w10), w5, SIGMA0_256(w13), w12);
-        SHA256ROUND(e, f, g, h, a, b, c, d, 60, w12);
+        SHA256ROUND_THROWA(e, f, g, h, a, b, c, d, 60, w12);
 
 	/* Skip last 3-rounds; not necessary for H==0 */
 #if 0
