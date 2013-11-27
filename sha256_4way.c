@@ -18,7 +18,7 @@
 
 #define NPAR 32
 
-static void DoubleBlockSHA256(const void* pin, void* pout, const void* pinit, unsigned int h[NPAR], const void* init2);
+static void DoubleBlockSHA256(const void* pin, void* pout, const void* pinit, const void* round3, unsigned int h[NPAR], const void* init2);
 
 static const unsigned int sha256_consts[] = {
     0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, /*  0 */
@@ -111,10 +111,42 @@ unsigned int ScanHash_4WaySSE2(int thr_id, const unsigned char *pmidstate,
 	const unsigned char *ptarget,
 	uint32_t max_nonce, unsigned long *nHashesDone)
 {
+    unsigned int* In = (unsigned int*)pdata;
+    unsigned int* hPre = (unsigned int*)pmidstate;
     unsigned int *nNonce_p = (unsigned int*)(pdata + 12);
     unsigned int nonce = 0;
 
+    /* needed for precalculating first three rounds */
+    __m128i w0, w1, w2;
+    __m128i a, b, c, d, e, f, g, h;
+    __m128i hMid[8];
+    __m128i T1;
+
     work_restart[thr_id].restart = 0;
+
+    /* precalculate first three rounds */
+    w0 = _mm_set1_epi32(In[0]);
+    w1 = _mm_set1_epi32(In[1]);
+    w2 = _mm_set1_epi32(In[2]);
+    a = _mm_set1_epi32(hPre[0]);
+    b = _mm_set1_epi32(hPre[1]);
+    c = _mm_set1_epi32(hPre[2]);
+    d = _mm_set1_epi32(hPre[3]);
+    e = _mm_set1_epi32(hPre[4]);
+    f = _mm_set1_epi32(hPre[5]);
+    g = _mm_set1_epi32(hPre[6]);
+    h = _mm_set1_epi32(hPre[7]);
+    SHA256ROUND(a, b, c, d, e, f, g, h, 0, w0);
+    SHA256ROUND(h, a, b, c, d, e, f, g, 1, w1);
+    SHA256ROUND(g, h, a, b, c, d, e, f, 2, w2);
+    hMid[0] = a;
+    hMid[1] = b;
+    hMid[2] = c;
+    hMid[3] = d;
+    hMid[4] = e;
+    hMid[5] = f;
+    hMid[6] = g;
+    hMid[7] = h;
 
     for (;;)
     {
@@ -124,7 +156,7 @@ unsigned int ScanHash_4WaySSE2(int thr_id, const unsigned char *pmidstate,
 	nonce += NPAR;
 	*nNonce_p = nonce;
 
-        DoubleBlockSHA256(pdata, phash1, pmidstate, thash_h, pSHA256InitState);
+        DoubleBlockSHA256(pdata, phash1, pmidstate, hMid, thash_h, pSHA256InitState);
 
         for (j = 0; j < NPAR; j++)
         {
@@ -151,16 +183,14 @@ unsigned int ScanHash_4WaySSE2(int thr_id, const unsigned char *pmidstate,
 }
 
 
-static void DoubleBlockSHA256(const void* pin, void* pad, const void *pre, unsigned int thash_h[NPAR], const void *init)
+static void DoubleBlockSHA256(const void* pin, void* pad, const void *pre, const void *round3, unsigned int thash_h[NPAR], const void *init)
 {
     unsigned int* In = (unsigned int*)pin;
     unsigned int* Pad = (unsigned int*)pad;
     unsigned int* hPre = (unsigned int*)pre;
+    __m128i const* hMid = round3;
     unsigned int* hInit = (unsigned int*)init;
     unsigned int /* i, j, */ k;
-
-    /* first three rounds do not depend on nonce */
-    __m128i hMid[8];
 
     /* vectors used in calculation */
     __m128i w0, w1, w2, w3, w4, w5, w6, w7;
@@ -173,30 +203,6 @@ static void DoubleBlockSHA256(const void* pin, void* pad, const void *pre, unsig
     __m128i offset = _mm_set_epi32(0x00000003, 0x00000002, 0x00000001, 0x00000000);
 
     preNonce = _mm_add_epi32(_mm_set1_epi32(In[3]), offset);
-
-    /* precalculate first three rounds */
-    w0 = _mm_set1_epi32(In[0]);
-    w1 = _mm_set1_epi32(In[1]);
-    w2 = _mm_set1_epi32(In[2]);
-    a = _mm_set1_epi32(hPre[0]);
-    b = _mm_set1_epi32(hPre[1]);
-    c = _mm_set1_epi32(hPre[2]);
-    d = _mm_set1_epi32(hPre[3]);
-    e = _mm_set1_epi32(hPre[4]);
-    f = _mm_set1_epi32(hPre[5]);
-    g = _mm_set1_epi32(hPre[6]);
-    h = _mm_set1_epi32(hPre[7]);
-    SHA256ROUND(a, b, c, d, e, f, g, h, 0, w0);
-    SHA256ROUND(h, a, b, c, d, e, f, g, 1, w1);
-    SHA256ROUND(g, h, a, b, c, d, e, f, 2, w2);
-    hMid[0] = a;
-    hMid[1] = b;
-    hMid[2] = c;
-    hMid[3] = d;
-    hMid[4] = e;
-    hMid[5] = f;
-    hMid[6] = g;
-    hMid[7] = h;
 
     for(k = 0; k<NPAR; k+=4) {
         w0 = _mm_set1_epi32(In[0]);
